@@ -1,0 +1,115 @@
+const API_BASE = "http://192.168.0.122:8000";
+let accessToken = "";
+
+// LOGIN
+async function login() {
+  const username = document.getElementById("username").value;
+  const password = document.getElementById("password").value;
+
+  try {
+    const res = await fetch(`${API_BASE}/api/auth/login/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password })
+    });
+
+    const data = await res.json();
+
+    if (!data.access) {
+      document.getElementById("login-status").innerText = "Login failed";
+      return;
+    }
+
+    accessToken = data.access;
+
+    // SHOW APP
+    document.getElementById("login").style.display = "none";
+    document.getElementById("app").style.display = "block";
+
+    await loadFiles();
+  } catch (err) {
+    console.error("Login error:", err);
+  }
+}
+
+// LOAD FILES
+async function loadFiles() {
+  try {
+    const res = await fetch(`${API_BASE}/api/files/`, {
+      headers: {
+        "Authorization": `Bearer ${accessToken}`
+      }
+    });
+
+    const files = await res.json();
+    const list = document.getElementById("fileList");
+    list.innerHTML = "";
+
+    if (files.length === 0) {
+      list.innerHTML = "<li>No files uploaded</li>";
+      return;
+    }
+
+    files.forEach(file => {
+      const li = document.createElement("li");
+      li.innerHTML = `
+        ${file.original_name}
+        <button onclick="downloadFile(${file.id})">⬇️</button>
+        <button onclick="deleteFile(${file.id})">🗑️</button>
+      `;
+      list.appendChild(li);
+    });
+  } catch (err) {
+    console.error("Load files error:", err);
+  }
+}
+
+// UPLOAD
+async function uploadFile() {
+  const input = document.getElementById("fileInput");
+  if (!input.files.length) return;
+
+  const formData = new FormData();
+  formData.append("file", input.files[0]);
+
+  await fetch(`${API_BASE}/api/files/upload/`, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${accessToken}`
+    },
+    body: formData
+  });
+
+  loadFiles();
+}
+
+// DOWNLOAD (uses fetch, not window.open)
+async function downloadFile(id) {
+  const res = await fetch(`${API_BASE}/api/files/${id}/download/`, {
+    headers: {
+      "Authorization": `Bearer ${accessToken}`
+    }
+  });
+
+  const blob = await res.blob();
+  const url = window.URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "file";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+// DELETE
+async function deleteFile(id) {
+  await fetch(`${API_BASE}/api/files/${id}/`, {
+    method: "DELETE",
+    headers: {
+      "Authorization": `Bearer ${accessToken}`
+    }
+  });
+
+  loadFiles();
+}
